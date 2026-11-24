@@ -2,9 +2,7 @@
 <html lang="pl">
 <head>
   <meta charset="UTF-8">
-  <title>vd-CPT Eye-Tracking Edition (Web)</title>
-  <!-- Biblioteka WebGazer.js do eye-trackingu przez kamerkę -->
-  <script src="https://webgazer.cs.brown.edu/webgazer.js"></script>
+  <title>vd-CPT – Test Bodźców</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; font-family: Arial, sans-serif; }
     body {
@@ -36,38 +34,61 @@
       border-radius: 8px;
       box-shadow: 0 4px 15px rgba(0,0,0,0.2);
       text-align: left;
-      max-width: 420px;
+      max-width: 450px;
       width: 100%;
     }
     .form-box h2 { margin-bottom: 20px; text-align: center; }
-    .form-group { margin-bottom: 15px; }
-    .form-group label { display: block; margin-bottom: 5px; font-weight: bold; }
+    .form-group { margin-bottom: 16px; }
+    .form-group label { display: block; margin-bottom: 6px; font-weight: bold; }
     .form-group input, .form-group select {
-      width: 100%; padding: 8px; font-size: 16px; border: 1px solid #ccc; border-radius: 4px;
+      width: 100%; padding: 9px; font-size: 15px; border: 1px solid #ccc; border-radius: 4px;
     }
-    button {
-      background: royalblue; color: white; border: none; padding: 12px 24px;
-      font-size: 16px; border-radius: 5px; cursor: pointer; font-weight: bold; margin-top: 10px;
-    }
-    button:hover { background: #27408b; }
 
-    /* Kalibracja */
-    .calib-point {
-      position: absolute;
-      width: 28px; height: 28px;
-      border-radius: 50%;
-      background: crimson;
-      border: 3px solid white;
-      transform: translate(-50%, -50%);
+    /* Przyciski wyboru grupy */
+    .group-buttons {
+      display: flex;
+      gap: 10px;
+    }
+    .group-btn {
+      flex: 1;
+      padding: 12px 10px;
+      border: 2px solid #ccc;
+      background: #f8f9fa;
+      color: #333;
+      border-radius: 6px;
       cursor: pointer;
-      box-shadow: 0 0 8px rgba(0,0,0,0.5);
-      transition: background 0.2s, transform 0.1s;
+      font-weight: bold;
+      font-size: 15px;
+      text-align: center;
+      transition: all 0.2s;
+      margin-top: 0;
     }
-    .calib-point:active { transform: translate(-50%, -50%) scale(0.85); }
-    #calib-instructions {
-      position: absolute; top: 15px; background: rgba(255,255,255,0.9);
-      padding: 10px 20px; border-radius: 6px; font-size: 16px; pointer-events: none;
+    .group-btn:hover { background: #e9ecef; }
+    .group-btn.selected-adhd {
+      border-color: royalblue;
+      background: #eef3ff;
+      color: royalblue;
     }
+    .group-btn.selected-ctrl {
+      border-color: seagreen;
+      background: #eefaf3;
+      color: seagreen;
+    }
+
+    .id-badge {
+      background: #f1f3f5;
+      padding: 8px 12px;
+      border-radius: 4px;
+      font-size: 14px;
+      color: #444;
+      border-left: 4px solid royalblue;
+    }
+
+    button.primary-btn {
+      background: royalblue; color: white; border: none; padding: 12px 24px;
+      font-size: 16px; border-radius: 5px; cursor: pointer; font-weight: bold; margin-top: 10px; width: 100%;
+    }
+    button.primary-btn:hover { background: #27408b; }
 
     /* Canvas eksperymentu */
     #exp-canvas {
@@ -89,39 +110,44 @@
   <!-- 1. OKNO DIALOGOWE -->
   <div id="screen-form" class="screen active">
     <div class="form-box">
-      <h2>vd-CPT Eye-Tracking Edition</h2>
+      <h2>vd-CPT – Badanie Uwagowe</h2>
+
       <div class="form-group">
-        <label>ID badanego:</label>
-        <input type="text" id="inp-id" placeholder="np. P01" required>
+        <label>Diagnoza ADHD:</label>
+        <div class="group-buttons">
+          <button type="button" id="btn-adhd" class="group-btn" onclick="selectGroup('ADHD')">Mam ADHD</button>
+          <button type="button" id="btn-ctrl" class="group-btn" onclick="selectGroup('Kontrolna')">Nie mam ADHD</button>
+        </div>
       </div>
+
+      <div class="form-group">
+        <div class="id-badge" id="auto-id-display">
+          Wybierz opcję powyżej, aby przydzielić ID badanego...
+        </div>
+      </div>
+
       <div class="form-group">
         <label>Wiek:</label>
-        <input type="number" id="inp-age" placeholder="np. 24" required>
+        <input type="number" id="inp-age" min="10" max="99" placeholder="Wpisz swój wiek">
       </div>
+
       <div class="form-group">
         <label>Płeć:</label>
         <select id="inp-sex">
-          <option value="K">K</option>
-          <option value="M">M</option>
-          <option value="Inna">Inna</option>
+          <option value="Kobieta">Kobieta</option>
+          <option value="Mężczyzna">Mężczyzna</option>
+          <option value="Inne">Inne</option>
+          <option value="Nie chcę podawać">Nie chcę podawać</option>
         </select>
       </div>
-      <p style="font-size: 13px; color: #555; margin-bottom: 10px;">
-        Badanie wymaga włączonej kamery internetowej. Usiądź przodem do światła, nie miej okna za plecami.
-      </p>
-      <button onclick="startCalibrationSetup()" style="width: 100%;">Dalej (Uruchom kamerę)</button>
+
+      <p id="form-error" style="color: crimson; font-size: 13px; margin-bottom: 8px; display: none;"></p>
+
+      <button class="primary-btn" onclick="goToInstructions()">Przejdź do instrukcji</button>
     </div>
   </div>
 
-  <!-- 2. KALIBRACJA EYE-TRACKERA -->
-  <div id="screen-calib" class="screen">
-    <div id="calib-instructions">
-      <b>Kalibracja kamery:</b> Patrz na czerwoną kropkę i kliknij ją <b>5 razy</b>, aż zmieni kolor na zielony.
-    </div>
-    <div id="calib-container" style="width: 100%; height: 100%; position: relative;"></div>
-  </div>
-
-  <!-- 3. INSTRUKCJA ZADANIA -->
+  <!-- 2. INSTRUKCJA ZADANIA -->
   <div id="screen-instr" class="screen">
     <p style="font-size: 20px; max-width: 800px; line-height: 1.5; margin-bottom: 20px;">
       <b>ZADANIE UWAGOWE</b><br><br>
@@ -137,26 +163,101 @@
     </p>
   </div>
 
-  <!-- 4. EKSPERYMENT -->
+  <!-- 3. EKSPERYMENT -->
   <div id="screen-exp" class="screen hide-cursor" style="padding: 0;">
     <canvas id="exp-canvas"></canvas>
   </div>
 
-  <!-- 5. PODSUMOWANIE -->
+  <!-- 4. PODSUMOWANIE -->
   <div id="screen-end" class="screen">
     <div class="summary-box" id="summary-content"></div>
   </div>
 
 <script>
 // ==========================================
-// ZMIENNE GLOBALNE I GENERATOR LOSOWY (SEED 42)
+// KONFIGURACJA OBRAZKÓW DLA DYSTRAKTORÓW DZIWNYCH
 // ==========================================
-let expInfo = {};
-let latestGaze = { x: null, y: null }; // W pikselach ekranu
-let gazeLog = []; // Surowe próbki eye-trackingu
-let trialResults = []; // Wyniki prób
+const FILES_WEIRD = [
+  'alien.png',
+  'alienbok.png',
+  'dino.png',
+  'ges.png',
+  'kon.png',
+  'kot.png',
+  'malpa.png',
+  'piesel.png'
+];
 
-// Generator pseudolosowy Mulberry32 (stałe ziarno = 42, jak random.seed(42) w Pythonie)
+// ==========================================
+// AUTOMATYCZNE ID I PRZYDZIAŁ DO GRUPY
+// ==========================================
+let selectedGroup = null; // 'ADHD' lub 'Kontrolna'
+let generatedID = '';
+let nextCounterNumber = 1;
+let expInfo = {};
+let trialResults = [];
+
+function getNextCounter(groupName) {
+  const storageKey = `vdcpt_counter_${groupName}`;
+  const current = parseInt(localStorage.getItem(storageKey) || '0', 10);
+  return current + 1;
+}
+
+function selectGroup(groupName) {
+  selectedGroup = groupName;
+  document.getElementById('btn-adhd').classList.remove('selected-adhd');
+  document.getElementById('btn-ctrl').classList.remove('selected-ctrl');
+
+  if (groupName === 'ADHD') {
+    document.getElementById('btn-adhd').classList.add('selected-adhd');
+  } else {
+    document.getElementById('btn-ctrl').classList.add('selected-ctrl');
+  }
+
+  nextCounterNumber = getNextCounter(groupName);
+  const numStr = String(nextCounterNumber).padStart(3, '0');
+  const prefix = groupName === 'ADHD' ? 'ADHD' : 'KONTROLA';
+  generatedID = `${prefix}_${numStr}`;
+
+  document.getElementById('auto-id-display').innerHTML =
+    `Przydzielona grupa: <b>${groupName}</b> &nbsp;|&nbsp; ID: <b>${generatedID}</b>`;
+  document.getElementById('form-error').style.display = 'none';
+}
+
+function goToInstructions() {
+  const errEl = document.getElementById('form-error');
+  if (!selectedGroup) {
+    errEl.textContent = 'Proszę zaznaczyć odpowiedź: "Mam ADHD" lub "Nie mam ADHD".';
+    errEl.style.display = 'block';
+    return;
+  }
+
+  const ageVal = document.getElementById('inp-age').value.trim();
+  if (!ageVal || parseInt(ageVal, 10) < 5) {
+    errEl.textContent = 'Proszę wpisać poprawny wiek.';
+    errEl.style.display = 'block';
+    return;
+  }
+
+  // Zapisujemy zwiększony licznik w przeglądarce dla kolejnej osoby
+  localStorage.setItem(`vdcpt_counter_${selectedGroup}`, String(nextCounterNumber));
+
+  const sexVal = document.getElementById('inp-sex').value;
+  expInfo = {
+    ID_badanego: generatedID,
+    Grupa: selectedGroup,
+    Wiek: ageVal,
+    Plec: sexVal
+  };
+
+  drawDemoCard();
+  showScreen('screen-instr');
+  window.addEventListener('keydown', waitSpaceForStart);
+}
+
+// ==========================================
+// GENERATOR LOSOWY (SEED 42)
+// ==========================================
 function mulberry32(a) {
   return function() {
     let t = a += 0x6D2B79F5;
@@ -182,90 +283,24 @@ function sampleWithoutReplacement(arr, k) {
 }
 
 // ==========================================
-// 1. INICJALIZACJA WEBGAZERA I KALIBRACJA
+// 1. NAWIGACJA EKRANÓW
 // ==========================================
 function showScreen(id) {
   document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
   document.getElementById(id).classList.add('active');
 }
 
-async function startCalibrationSetup() {
-  const idVal = document.getElementById('inp-id').value.trim() || 'anonim';
-  const ageVal = document.getElementById('inp-age').value.trim() || '0';
-  const sexVal = document.getElementById('inp-sex').value;
-  expInfo = { ID_badanego: idVal, Wiek: ageVal, Plec: sexVal };
-
-  showScreen('screen-calib');
-
-  // Uruchomienie WebGazer
-  await webgazer.setRegression('ridge')
-    .setGazeListener((data, clock) => {
-      if (data) {
-        latestGaze.x = data.x;
-        latestGaze.y = data.y;
-      }
-    })
-    .begin();
-
-  // Ukrywamy podgląd kamery po kalibracji, ale na czas kalibracji zostawiamy mały podgląd twarzy
-  webgazer.showVideoPreview(true).showPredictionPoints(true);
-  buildCalibrationPoints();
-}
-
-function buildCalibrationPoints() {
-  const container = document.getElementById('calib-container');
-  container.innerHTML = '';
-  // 9 punktów kalibracyjnych (w tym centralny i okolice slotów AOI)
-  const coords = [
-    [15, 15], [50, 15], [85, 15],
-    [15, 50], [50, 50], [85, 50],
-    [15, 85], [50, 85], [85, 85]
-  ];
-  let completedPoints = 0;
-
-  coords.forEach(([px, py]) => {
-    const pt = document.createElement('div');
-    pt.className = 'calib-point';
-    pt.style.left = px + '%';
-    pt.style.top = py + '%';
-    let clicks = 0;
-
-    pt.onclick = () => {
-      clicks++;
-      if (clicks >= 5 && !pt.dataset.done) {
-        pt.dataset.done = 'true';
-        pt.style.background = 'limegreen';
-        pt.style.pointerEvents = 'none';
-        completedPoints++;
-        if (completedPoints === coords.length) {
-          setTimeout(finishCalibration, 400);
-        }
-      }
-    };
-    container.appendChild(pt);
-  });
-}
-
-function finishCalibration() {
-  // Wyłączamy podgląd kamery i czerwoną kropkę predykcji, żeby nie rozpraszały w zadaniu
-  webgazer.showVideoPreview(false).showPredictionPoints(false);
-  drawDemoCard();
-  showScreen('screen-instr');
-
-  window.addEventListener('keydown', waitSpaceForStart);
-}
-
 function waitSpaceForStart(e) {
   if (e.code === 'Space') {
+    e.preventDefault();
     window.removeEventListener('keydown', waitSpaceForStart);
     startExperiment();
   }
 }
 
 // ==========================================
-// 2. RYSOWANIE KART I DYSTRAKTORÓW (JEDNOSTKI 'HEIGHT')
+// 2. RYSOWANIE KART I DYSTRAKTORÓW
 // ==========================================
-// Przelicznik jednostek PsychoPy 'height' (0,0 na środku, Y w górę) na piksele Canvas
 function toPx(x_h, y_h, W, H) {
   return {
     x: W / 2 + x_h * H,
@@ -308,14 +343,12 @@ function drawCard(ctx, cardSpec, centerX_h, centerY_h, W, H) {
   const wPx = 0.20 * H;
   const hPx = 0.28 * H;
 
-  // Tło karty
   ctx.fillStyle = 'white';
   ctx.strokeStyle = 'black';
   ctx.lineWidth = 2.5;
   ctx.fillRect(pos.x - wPx / 2, pos.y - hPx / 2, wPx, hPx);
   ctx.strokeRect(pos.x - wPx / 2, pos.y - hPx / 2, wPx, hPx);
 
-  // Symbole
   drawSymbol(ctx, cardSpec.cSym, pos.x, pos.y, 0.095 * H, cardSpec.cCol);
   if (cardSpec.tlSym) {
     const tl = toPx(centerX_h - 0.068, centerY_h + 0.098, W, H);
@@ -343,45 +376,49 @@ function drawDemoCard() {
   drawCard(ctx, TARGET_CARD, 0, 0, c.width, c.height * 3.2);
 }
 
-// Rysowanie kształtów dystraktorów
-function drawDistractorShape(ctx, shapeType, color, xPx, yPx, sizePx, oriDeg, opacity) {
+function drawDistractorItem(ctx, distEvent, xPx, yPx, sizePx, oriDeg, opacity) {
   ctx.save();
   ctx.globalAlpha = opacity;
   ctx.translate(xPx, yPx);
   ctx.rotate((oriDeg * Math.PI) / 180);
-  ctx.fillStyle = color;
-  ctx.strokeStyle = 'black';
-  ctx.lineWidth = 2;
 
-  ctx.beginPath();
-  if (shapeType === 'star7') {
-    for (let i = 0; i < 14; i++) {
-      const a = (i / 14) * 2 * Math.PI;
-      const r = (i % 2 === 0 ? 0.5 : 0.22) * sizePx;
-      if (i === 0) ctx.moveTo(r * Math.cos(a), r * Math.sin(a));
-      else ctx.lineTo(r * Math.cos(a), r * Math.sin(a));
-    }
-  } else if (shapeType === 'cross') {
-    const w = sizePx * 0.16, l = sizePx * 0.5;
-    ctx.rect(-w, -l, w * 2, l * 2);
-    ctx.rect(-l, -w, l * 2, w * 2);
+  if (distEvent.img && distEvent.img.complete && distEvent.img.naturalWidth > 0) {
+    const ratio = distEvent.img.naturalWidth / distEvent.img.naturalHeight;
+    const drawH = sizePx;
+    const drawW = sizePx * ratio;
+    ctx.drawImage(distEvent.img, -drawW / 2, -drawH / 2, drawW, drawH);
   } else {
-    const edges = shapeType; // liczba boków wielokąta
-    for (let i = 0; i < edges; i++) {
-      const a = (2 * Math.PI * i) / edges;
-      const r = 0.5 * sizePx;
-      if (i === 0) ctx.moveTo(r * Math.cos(a), r * Math.sin(a));
-      else ctx.lineTo(r * Math.cos(a), r * Math.sin(a));
+    const shapeType = distEvent.shape || 8;
+    ctx.fillStyle = distEvent.color || 'magenta';
+    ctx.strokeStyle = 'black';
+    ctx.lineWidth = 2;
+
+    ctx.beginPath();
+    if (shapeType === 'star7') {
+      for (let i = 0; i < 14; i++) {
+        const a = (i / 14) * 2 * Math.PI;
+        const r = (i % 2 === 0 ? 0.5 : 0.22) * sizePx;
+        if (i === 0) ctx.moveTo(r * Math.cos(a), r * Math.sin(a));
+        else ctx.lineTo(r * Math.cos(a), r * Math.sin(a));
+      }
+    } else {
+      const edges = shapeType;
+      for (let i = 0; i < edges; i++) {
+        const a = (2 * Math.PI * i) / edges;
+        const r = 0.5 * sizePx;
+        if (i === 0) ctx.moveTo(r * Math.cos(a), r * Math.sin(a));
+        else ctx.lineTo(r * Math.cos(a), r * Math.sin(a));
+      }
     }
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
   }
-  ctx.closePath();
-  ctx.fill();
-  ctx.stroke();
   ctx.restore();
 }
 
 // ==========================================
-// 3. GENEROWANIE SEKWENCJI PRÓB (1:1 Z PYTHONEM)
+// 3. PULE DYSTRAKTORÓW I GENEROWANIE SEKWENCJI
 // ==========================================
 const DISTRACTOR_SLOTS = {
   top: [0.0, 0.26],
@@ -391,17 +428,24 @@ const DISTRACTOR_SLOTS = {
 };
 
 const POOL_SIMPLE = [
-  { shape: 32, color: 'steelblue', base_scale: 0.13 },
-  { shape: 4, color: 'seagreen', base_scale: 0.14 },
-  { shape: 3, color: 'slategray', base_scale: 0.15 },
-  { shape: 5, color: 'darkgoldenrod', base_scale: 0.14 }
+  { img: null, shape: 32, color: 'steelblue', base_scale: 0.13 },
+  { img: null, shape: 4,  color: 'seagreen', base_scale: 0.14 },
+  { img: null, shape: 3,  color: 'slategray', base_scale: 0.15 },
+  { img: null, shape: 5,  color: 'darkgoldenrod', base_scale: 0.14 }
 ];
-const POOL_WEIRD = [
-  { shape: 'star7', color: 'magenta', base_scale: 0.16 },
-  { shape: 'cross', color: 'deepskyblue', base_scale: 0.16 },
-  { shape: 8, color: 'limegreen', base_scale: 0.16 },
-  { shape: 'star7', color: 'orange', base_scale: 0.16 }
-];
+
+const POOL_WEIRD = FILES_WEIRD.map(fileName => {
+  const imageObj = new Image();
+  imageObj.src = `dystraktory_dziwne/${fileName}`;
+  return {
+    img: imageObj,
+    fileName: fileName,
+    shape: 'star7',
+    color: 'magenta',
+    base_scale: 0.16
+  };
+});
+
 const ANIMS_SIMPLE = ['blink_clear', 'slow_spin', 'pulse_size'];
 const ANIMS_WEIRD = ['rock_sway', 'bounce_wobble', 'loom_approach', 'tilt_pour', 'beacon_pulse'];
 
@@ -461,6 +505,7 @@ BLOCKS_CONFIG.forEach(bCfg => {
           globalDistractorEvents.push({
             slot: slotName,
             category: distCat,
+            img: item.img,
             shape: item.shape,
             color: item.color,
             base_scale: item.base_scale,
@@ -501,28 +546,7 @@ BLOCKS_CONFIG.forEach(bCfg => {
 });
 
 // ==========================================
-// 4. KLASYFIKACJA AOI EYE-TRACKINGU
-// ==========================================
-function classifyGazeAOI(gazeX_px, gazeY_px, W, H) {
-  if (gazeX_px === null || gazeY_px === null) return { x_h: '', y_h: '', aoi: 'no_data' };
-  // Przeliczenie z pikseli na jednostki 'height' PsychoPy
-  const x_h = (gazeX_px - W / 2) / H;
-  const y_h = (H / 2 - gazeY_px) / H;
-
-  // Karta centralna: width=0.20, height=0.28 (z lekkim marginesem tolerancji kamery +/- 0.03)
-  if (Math.abs(x_h) <= 0.13 && Math.abs(y_h) <= 0.17) return { x_h, y_h, aoi: 'center_card' };
-
-  // 4 sloty dystraktorów (promień ~0.12 wokół środków slotów)
-  for (const [slot, [sx, sy]] of Object.entries(DISTRACTOR_SLOTS)) {
-    if (Math.hypot(x_h - sx, y_h - sy) <= 0.13) {
-      return { x_h, y_h, aoi: `slot_${slot}` };
-    }
-  }
-  return { x_h, y_h, aoi: 'outside' };
-}
-
-// ==========================================
-// 5. GŁÓWNA PĘTLA EKSPERYMENTU
+// 4. GŁÓWNA PĘTLA EKSPERYMENTU
 // ==========================================
 let currentTrialIdx = 0;
 let trialStartPerf = 0;
@@ -597,23 +621,6 @@ function renderFrame() {
     return;
   }
 
-  // Zapis próbki Eye-Trackingu w bieżącej klatce
-  const gazeInfo = classifyGazeAOI(latestGaze.x, latestGaze.y, W, H);
-  gazeLog.push({
-    global_trial: currentTrialIdx + 1,
-    block_num: trial.block_num,
-    condition: trial.dist_category,
-    trial_type: trial.trial_type,
-    phase: t <= trial.stim_dur ? 'stim' : 'void',
-    trial_t_s: t.toFixed(4),
-    global_t_s: global_t.toFixed(4),
-    gaze_x_px: latestGaze.x !== null ? Math.round(latestGaze.x) : '',
-    gaze_y_px: latestGaze.y !== null ? Math.round(latestGaze.y) : '',
-    gaze_x_height: gazeInfo.x_h !== '' ? gazeInfo.x_h.toFixed(4) : '',
-    gaze_y_height: gazeInfo.y_h !== '' ? gazeInfo.y_h.toFixed(4) : '',
-    aoi: gazeInfo.aoi
-  });
-
   // Czyszczenie ekranu
   ctx.fillStyle = 'rgb(199, 199, 199)';
   ctx.fillRect(0, 0, W, H);
@@ -623,6 +630,13 @@ function renderFrame() {
   ctx.strokeStyle = 'rgb(153, 153, 153)';
   ctx.lineWidth = 1;
   ctx.strokeRect(boxPos.x - (0.68 * H) / 2, boxPos.y - (0.72 * H) / 2, 0.68 * H, 0.72 * H);
+
+  // Wskaźnik trybu Turbo
+  if (turboMode) {
+    ctx.fillStyle = 'crimson';
+    ctx.font = 'bold 16px Arial';
+    ctx.fillText('TRYB TURBO 5x (naciśnij ↑ aby wyłączyć)', 20, 30);
+  }
 
   // Rysowanie karty w fazie stim
   if (t <= trial.stim_dur) {
@@ -669,7 +683,7 @@ function renderFrame() {
       }
 
       const dPx = toPx(x_h, y_h, W, H);
-      drawDistractorShape(ctx, d.shape, d.color, dPx.x, dPx.y, scale * H, ori, opacity);
+      drawDistractorItem(ctx, d, dPx.x, dPx.y, scale * H, ori, opacity);
     }
   });
 
@@ -677,7 +691,7 @@ function renderFrame() {
 }
 
 // ==========================================
-// 6. ZAPIS DANYCH I EKSPORT CSV
+// 5. ZAPIS DANYCH I EKSPORT CSV
 // ==========================================
 function recordTrialData(trial) {
   const numPresses = pressTimes.length;
@@ -725,14 +739,9 @@ function recordTrialData(trial) {
     d => d.global_onset < trial.global_end && d.global_offset > trial.global_start
   );
 
-  // Obliczenie % czasu patrzenia na kartę i dystraktory w tej próbie
-  const trialGaze = gazeLog.filter(g => g.global_trial === currentTrialIdx + 1);
-  const validGaze = trialGaze.filter(g => g.aoi !== 'no_data');
-  const onCardPct = validGaze.length ? ((validGaze.filter(g => g.aoi === 'center_card').length / validGaze.length) * 100).toFixed(1) : '';
-  const onDistPct = validGaze.length ? ((validGaze.filter(g => g.aoi.startsWith('slot_')).length / validGaze.length) * 100).toFixed(1) : '';
-
   trialResults.push({
     ID_badanego: expInfo.ID_badanego,
+    Grupa: expInfo.Grupa,
     Wiek: expInfo.Wiek,
     Plec: expInfo.Plec,
     global_trial: currentTrialIdx + 1,
@@ -751,9 +760,7 @@ function recordTrialData(trial) {
     first_press_phase: firstPhase,
     impulsive_commission: trialImpulsiveComm,
     hyperactive_commission: trialHyperactiveComm,
-    outcome: outcome,
-    gaze_on_card_pct: onCardPct,
-    gaze_on_distractors_pct: onDistPct
+    outcome: outcome
   });
 }
 
@@ -774,7 +781,6 @@ function downloadCSV(rows, filename) {
 
 function finishExperiment() {
   window.removeEventListener('keydown', handleExpKeydown);
-  webgazer.end();
 
   const totalHits = stats.correct_attention_and_timing + stats.correct_attention_only_late;
   const accuracyPct = stats.total_targets > 0 ? ((totalHits / stats.total_targets) * 100).toFixed(1) : '0.0';
@@ -784,6 +790,7 @@ function finishExperiment() {
 
   document.getElementById('summary-content').innerHTML = `
     <h2>KONIEC ZADANIA – TWOJE WYNIKI</h2><br>
+    <p><b>ID:</b> ${expInfo.ID_badanego} &nbsp;|&nbsp; <b>Grupa:</b> ${expInfo.Grupa}</p><br>
     <p><b>Poprawna uwaga (Attention – wszystkie trafienia):</b> ${totalHits} / ${stats.total_targets} (${accuracyPct}%)</p>
     <p style="margin-left: 15px;">• Właściwy czas reakcji (Timing – podczas karty): ${stats.correct_attention_and_timing}</p>
     <p style="margin-left: 15px;">• Reakcja spóźniona (po zniknięciu karty): ${stats.correct_attention_only_late}</p><br>
@@ -791,15 +798,12 @@ function finishExperiment() {
     <p><b>Impulsywność (Impulsive Commissions):</b> ${stats.impulsive_commissions}</p>
     <p><b>Nadruchliwość (Hyperactive Commissions):</b> ${stats.hyperactive_commissions}</p><br>
     <p><b>Średni czas reakcji:</b> ${meanRtMs} ms</p><br>
-    <p style="color: green; font-weight: bold;">Pliki z wynikami (CSV) zostały automatycznie pobrane na Twój komputer.</p>
+    <p style="color: green; font-weight: bold;">Plik z wynikami (CSV) został automatycznie pobrany na Twój komputer.</p>
   `;
   showScreen('screen-end');
 
   const dateTag = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
-  downloadCSV(trialResults, `vdCPT_ET_${expInfo.ID_badanego}_${dateTag}_proby.csv`);
-  setTimeout(() => {
-    downloadCSV(gazeLog, `vdCPT_ET_${expInfo.ID_badanego}_${dateTag}_eyetracking.csv`);
-  }, 600);
+  downloadCSV(trialResults, `vdCPT_${expInfo.ID_badanego}_${dateTag}_proby.csv`);
 }
 </script>
 </body>
