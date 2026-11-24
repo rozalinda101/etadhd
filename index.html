@@ -2,7 +2,9 @@
 <html lang="pl">
 <head>
   <meta charset="UTF-8">
-  <title>vd-CPT – Test Bodźców</title>
+  <title>vd-CPT Eye-Tracking Edition</title>
+  <!-- Biblioteka WebGazer.js do eye-trackingu przez kamerkę -->
+  <script src="https://webgazer.cs.brown.edu/webgazer.js"></script>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; font-family: Arial, sans-serif; }
     body {
@@ -34,7 +36,7 @@
       border-radius: 8px;
       box-shadow: 0 4px 15px rgba(0,0,0,0.2);
       text-align: left;
-      max-width: 450px;
+      max-width: 460px;
       width: 100%;
     }
     .form-box h2 { margin-bottom: 20px; text-align: center; }
@@ -45,10 +47,7 @@
     }
 
     /* Przyciski wyboru grupy */
-    .group-buttons {
-      display: flex;
-      gap: 10px;
-    }
+    .group-buttons { display: flex; gap: 10px; }
     .group-btn {
       flex: 1;
       padding: 12px 10px;
@@ -64,16 +63,8 @@
       margin-top: 0;
     }
     .group-btn:hover { background: #e9ecef; }
-    .group-btn.selected-adhd {
-      border-color: royalblue;
-      background: #eef3ff;
-      color: royalblue;
-    }
-    .group-btn.selected-ctrl {
-      border-color: seagreen;
-      background: #eefaf3;
-      color: seagreen;
-    }
+    .group-btn.selected-adhd { border-color: royalblue; background: #eef3ff; color: royalblue; }
+    .group-btn.selected-ctrl { border-color: seagreen; background: #eefaf3; color: seagreen; }
 
     .id-badge {
       background: #f1f3f5;
@@ -89,6 +80,26 @@
       font-size: 16px; border-radius: 5px; cursor: pointer; font-weight: bold; margin-top: 10px; width: 100%;
     }
     button.primary-btn:hover { background: #27408b; }
+
+    /* Kalibracja */
+    .calib-point {
+      position: absolute;
+      width: 30px; height: 30px;
+      border-radius: 50%;
+      background: crimson;
+      border: 3px solid white;
+      transform: translate(-50%, -50%);
+      cursor: pointer;
+      box-shadow: 0 0 8px rgba(0,0,0,0.5);
+      transition: background 0.2s, transform 0.1s;
+      z-index: 100;
+    }
+    .calib-point:active { transform: translate(-50%, -50%) scale(0.85); }
+    #calib-instructions {
+      position: absolute; top: 15px; background: rgba(255,255,255,0.92);
+      padding: 12px 22px; border-radius: 6px; font-size: 16px; pointer-events: none;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.15); z-index: 90;
+    }
 
     /* Canvas eksperymentu */
     #exp-canvas {
@@ -110,7 +121,7 @@
   <!-- 1. OKNO DIALOGOWE -->
   <div id="screen-form" class="screen active">
     <div class="form-box">
-      <h2>vd-CPT – Badanie Uwagowe</h2>
+      <h2>vd-CPT Eye-Tracking Edition</h2>
 
       <div class="form-group">
         <label>Diagnoza ADHD:</label>
@@ -141,13 +152,25 @@
         </select>
       </div>
 
+      <p style="font-size: 13px; color: #555; margin-bottom: 10px; line-height: 1.4;">
+        Badanie wykorzystuje kamerkę internetową do śledzenia ruchu gałek ocznych (obraz wideo nie jest nagrywany ani wysyłany). Usiądź przodem do źródła światła.
+      </p>
+
       <p id="form-error" style="color: crimson; font-size: 13px; margin-bottom: 8px; display: none;"></p>
 
-      <button class="primary-btn" onclick="goToInstructions()">Przejdź do instrukcji</button>
+      <button class="primary-btn" onclick="startCalibrationSetup()">Dalej (Uruchom kamerę i kalibrację)</button>
     </div>
   </div>
 
-  <!-- 2. INSTRUKCJA ZADANIA -->
+  <!-- 2. KALIBRACJA EYE-TRACKERA -->
+  <div id="screen-calib" class="screen">
+    <div id="calib-instructions">
+      <b>Kalibracja kamery:</b> Ustaw twarz w ramce podglądu, a następnie patrz na każdą czerwoną kropkę i kliknij ją <b>5 razy</b>, aż zmieni kolor na zielony.
+    </div>
+    <div id="calib-container" style="width: 100%; height: 100%; position: relative;"></div>
+  </div>
+
+  <!-- 3. INSTRUKCJA ZADANIA -->
   <div id="screen-instr" class="screen">
     <p style="font-size: 20px; max-width: 800px; line-height: 1.5; margin-bottom: 20px;">
       <b>ZADANIE UWAGOWE</b><br><br>
@@ -163,12 +186,12 @@
     </p>
   </div>
 
-  <!-- 3. EKSPERYMENT -->
+  <!-- 4. EKSPERYMENT -->
   <div id="screen-exp" class="screen hide-cursor" style="padding: 0;">
     <canvas id="exp-canvas"></canvas>
   </div>
 
-  <!-- 4. PODSUMOWANIE -->
+  <!-- 5. PODSUMOWANIE -->
   <div id="screen-end" class="screen">
     <div class="summary-box" id="summary-content"></div>
   </div>
@@ -189,13 +212,16 @@ const FILES_WEIRD = [
 ];
 
 // ==========================================
-// AUTOMATYCZNE ID I PRZYDZIAŁ DO GRUPY
+// AUTOMATYCZNE ID, ZMIENNE GLOBALNE I EYE-TRACKING
 // ==========================================
-let selectedGroup = null; // 'ADHD' lub 'Kontrolna'
+let selectedGroup = null;
 let generatedID = '';
 let nextCounterNumber = 1;
 let expInfo = {};
 let trialResults = [];
+
+let latestGaze = { x: null, y: null };
+let gazeLog = [];
 
 function getNextCounter(groupName) {
   const storageKey = `vdcpt_counter_${groupName}`;
@@ -224,7 +250,7 @@ function selectGroup(groupName) {
   document.getElementById('form-error').style.display = 'none';
 }
 
-function goToInstructions() {
+async function startCalibrationSetup() {
   const errEl = document.getElementById('form-error');
   if (!selectedGroup) {
     errEl.textContent = 'Proszę zaznaczyć odpowiedź: "Mam ADHD" lub "Nie mam ADHD".';
@@ -239,7 +265,6 @@ function goToInstructions() {
     return;
   }
 
-  // Zapisujemy zwiększony licznik w przeglądarce dla kolejnej osoby
   localStorage.setItem(`vdcpt_counter_${selectedGroup}`, String(nextCounterNumber));
 
   const sexVal = document.getElementById('inp-sex').value;
@@ -250,6 +275,60 @@ function goToInstructions() {
     Plec: sexVal
   };
 
+  showScreen('screen-calib');
+
+  try {
+    await webgazer.setRegression('ridge')
+      .setGazeListener((data, clock) => {
+        if (data) {
+          latestGaze.x = data.x;
+          latestGaze.y = data.y;
+        }
+      })
+      .begin();
+
+    webgazer.showVideoPreview(true).showPredictionPoints(true);
+    buildCalibrationPoints();
+  } catch (err) {
+    alert('Nie udało się uruchomić kamery. Upewnij się, że zezwoliłeś przeglądarce na dostęp do kamery i otwierasz stronę przez HTTPS lub localhost.');
+  }
+}
+
+function buildCalibrationPoints() {
+  const container = document.getElementById('calib-container');
+  container.innerHTML = '';
+  const coords = [
+    [15, 18], [50, 18], [85, 18],
+    [15, 50], [50, 50], [85, 50],
+    [15, 85], [50, 85], [85, 85]
+  ];
+  let completedPoints = 0;
+
+  coords.forEach(([px, py]) => {
+    const pt = document.createElement('div');
+    pt.className = 'calib-point';
+    pt.style.left = px + '%';
+    pt.style.top = py + '%';
+    let clicks = 0;
+
+    pt.onclick = () => {
+      clicks++;
+      if (clicks >= 5 && !pt.dataset.done) {
+        pt.dataset.done = 'true';
+        pt.style.background = 'limegreen';
+        pt.style.pointerEvents = 'none';
+        completedPoints++;
+        if (completedPoints === coords.length) {
+          setTimeout(finishCalibration, 400);
+        }
+      }
+    };
+    container.appendChild(pt);
+  });
+}
+
+function finishCalibration() {
+  webgazer.showVideoPreview(false).showPredictionPoints(false);
   drawDemoCard();
   showScreen('screen-instr');
   window.addEventListener('keydown', waitSpaceForStart);
@@ -546,7 +625,27 @@ BLOCKS_CONFIG.forEach(bCfg => {
 });
 
 // ==========================================
-// 4. GŁÓWNA PĘTLA EKSPERYMENTU
+// 4. KLASYFIKACJA AOI EYE-TRACKINGU
+// ==========================================
+function classifyGazeAOI(gazeX_px, gazeY_px, W, H) {
+  if (gazeX_px === null || gazeY_px === null) return { x_h: '', y_h: '', aoi: 'no_data' };
+  const x_h = (gazeX_px - W / 2) / H;
+  const y_h = (H / 2 - gazeY_px) / H;
+
+  // Karta centralna (z marginesem tolerancji kamery +/- 0.03)
+  if (Math.abs(x_h) <= 0.13 && Math.abs(y_h) <= 0.17) return { x_h, y_h, aoi: 'center_card' };
+
+  // 4 sloty dystraktorów
+  for (const [slot, [sx, sy]] of Object.entries(DISTRACTOR_SLOTS)) {
+    if (Math.hypot(x_h - sx, y_h - sy) <= 0.13) {
+      return { x_h, y_h, aoi: `slot_${slot}` };
+    }
+  }
+  return { x_h, y_h, aoi: 'outside' };
+}
+
+// ==========================================
+// 5. GŁÓWNA PĘTLA EKSPERYMENTU
 // ==========================================
 let currentTrialIdx = 0;
 let trialStartPerf = 0;
@@ -621,6 +720,25 @@ function renderFrame() {
     return;
   }
 
+  // Rejestracja próbki Eye-Trackingu w bieżącej klatce
+  const gazeInfo = classifyGazeAOI(latestGaze.x, latestGaze.y, W, H);
+  gazeLog.push({
+    ID_badanego: expInfo.ID_badanego,
+    Grupa: expInfo.Grupa,
+    global_trial: currentTrialIdx + 1,
+    block_num: trial.block_num,
+    condition: trial.dist_category,
+    trial_type: trial.trial_type,
+    phase: t <= trial.stim_dur ? 'stim' : 'void',
+    trial_t_s: t.toFixed(4),
+    global_t_s: global_t.toFixed(4),
+    gaze_x_px: latestGaze.x !== null ? Math.round(latestGaze.x) : '',
+    gaze_y_px: latestGaze.y !== null ? Math.round(latestGaze.y) : '',
+    gaze_x_height: gazeInfo.x_h !== '' ? gazeInfo.x_h.toFixed(4) : '',
+    gaze_y_height: gazeInfo.y_h !== '' ? gazeInfo.y_h.toFixed(4) : '',
+    aoi: gazeInfo.aoi
+  });
+
   // Czyszczenie ekranu
   ctx.fillStyle = 'rgb(199, 199, 199)';
   ctx.fillRect(0, 0, W, H);
@@ -691,7 +809,7 @@ function renderFrame() {
 }
 
 // ==========================================
-// 5. ZAPIS DANYCH I EKSPORT CSV
+// 6. ZAPIS DANYCH I EKSPORT CSV
 // ==========================================
 function recordTrialData(trial) {
   const numPresses = pressTimes.length;
@@ -739,6 +857,12 @@ function recordTrialData(trial) {
     d => d.global_onset < trial.global_end && d.global_offset > trial.global_start
   );
 
+  // Podsumowanie Eye-Trackingu dla danej próby
+  const trialGaze = gazeLog.filter(g => g.global_trial === currentTrialIdx + 1);
+  const validGaze = trialGaze.filter(g => g.aoi !== 'no_data');
+  const onCardPct = validGaze.length ? ((validGaze.filter(g => g.aoi === 'center_card').length / validGaze.length) * 100).toFixed(1) : '';
+  const onDistPct = validGaze.length ? ((validGaze.filter(g => g.aoi.startsWith('slot_')).length / validGaze.length) * 100).toFixed(1) : '';
+
   trialResults.push({
     ID_badanego: expInfo.ID_badanego,
     Grupa: expInfo.Grupa,
@@ -760,7 +884,9 @@ function recordTrialData(trial) {
     first_press_phase: firstPhase,
     impulsive_commission: trialImpulsiveComm,
     hyperactive_commission: trialHyperactiveComm,
-    outcome: outcome
+    outcome: outcome,
+    gaze_on_card_pct: onCardPct,
+    gaze_on_distractors_pct: onDistPct
   });
 }
 
@@ -781,6 +907,7 @@ function downloadCSV(rows, filename) {
 
 function finishExperiment() {
   window.removeEventListener('keydown', handleExpKeydown);
+  try { webgazer.end(); } catch (e) {}
 
   const totalHits = stats.correct_attention_and_timing + stats.correct_attention_only_late;
   const accuracyPct = stats.total_targets > 0 ? ((totalHits / stats.total_targets) * 100).toFixed(1) : '0.0';
@@ -798,12 +925,15 @@ function finishExperiment() {
     <p><b>Impulsywność (Impulsive Commissions):</b> ${stats.impulsive_commissions}</p>
     <p><b>Nadruchliwość (Hyperactive Commissions):</b> ${stats.hyperactive_commissions}</p><br>
     <p><b>Średni czas reakcji:</b> ${meanRtMs} ms</p><br>
-    <p style="color: green; font-weight: bold;">Plik z wynikami (CSV) został automatycznie pobrany na Twój komputer.</p>
+    <p style="color: green; font-weight: bold;">Pliki z wynikami (CSV) oraz danymi eye-trackingowymi zostały automatycznie pobrane na Twój komputer.</p>
   `;
   showScreen('screen-end');
 
   const dateTag = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
   downloadCSV(trialResults, `vdCPT_${expInfo.ID_badanego}_${dateTag}_proby.csv`);
+  setTimeout(() => {
+    downloadCSV(gazeLog, `vdCPT_${expInfo.ID_badanego}_${dateTag}_eyetracking.csv`);
+  }, 600);
 }
 </script>
 </body>
